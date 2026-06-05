@@ -1,7 +1,7 @@
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
-const mongoose  = require('mongoose');
+const mongoose = require('mongoose');
 const multer = require('multer');
 
 const feedRoutes = require('./routes/feed.js');
@@ -10,47 +10,47 @@ const AuthRoutes = require('./routes/auth.js');
 const app = express();
 
 const fileStorage = multer.diskStorage({
-    destination : (req, file ,cb) =>{
-        cb(null , 'images');
+    destination: (req, file, cb) => {
+        cb(null, 'images');
     },
-    filename : (req , file, cb) => {
-        cb(null , new Date().toISOString() + '-' + file.originalname);
+    filename: (req, file, cb) => {
+        cb(null, new Date().toISOString() + '-' + file.originalname);
     }
 });
 
 const fileFilter = (req, file, cb) => {
-    if(
+    if (
         file.mimetype === 'image/jpg' ||
         file.mimetype === 'image/png' ||
         file.mimetype === 'image/jpeg'
-    ){
-        cb(null , true);
-    }else {
-        cb(null , false);
+    ) {
+        cb(null, true);
+    } else {
+        cb(null, false);
     }
 }
 
 // app.use(bodyParser.urlencoded()); // x-www-form-urlencoded <form>
 app.use(bodyParser.json()); // application/json
-app.use(multer({storage : fileStorage , fileFilter : fileFilter}).single('image'))
-app.use('/images' , express.static(path.join(__dirname , 'images')));
+app.use(multer({ storage: fileStorage, fileFilter: fileFilter }).single('image'))
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
-app.use((req, res, next)=>{
-    res.setHeader('Access-Control-Allow-Origin' , '*');
-    res.setHeader('Access-Control-Allow-Methods' , 'OPTIONS , GET , POST , PUT , PATCH , DELETE ');
-    res.setHeader('Access-Control-Allow-Headers' , 'Content-Type , Authorization');
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS , GET , POST , PUT , PATCH , DELETE ');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type , Authorization');
     next();
 })
 
 app.use('/feed', feedRoutes);
-app.use('/auth' , AuthRoutes);
+app.use('/auth', AuthRoutes);
 
-app.use((error ,req, res , next) => {
+app.use((error, req, res, next) => {
     console.log(error);
-    const status = error.statusCode || 500 ;
+    const status = error.statusCode || 500;
     const message = error.message;
-    const data = error.data ;
-    res.status(status).json({message : message , data : data});
+    const data = error.data;
+    res.status(status).json({ message: message, data: data });
 })
 
 mongoose.connect(
@@ -59,13 +59,8 @@ mongoose.connect(
     .then(result => {
         console.log('DATABASE IS CONNECTED AND SERVER IS ON 8080')
         const server = app.listen(8080);
-        const io = require('socket.io')(server, {
-            cors: {
-                origin: 'http://localhost:3000',
-                methods: ['GET', 'POST' , 'PUT' , 'PATCH' , 'DELETE']
-            }
-        });
-        io.on('connection' , socket => {
+        const io = require('./socket.js').init(server);
+        io.on('connection', socket => {
             console.log('Client connected');
         })
     })

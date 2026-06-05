@@ -2,6 +2,7 @@ const {validationResult} = require('express-validator');
 const fs = require('fs');
 const path = require('path');
 
+const io = require('../socket.js');
 const Post = require('../modals/post.js');
 const User = require('../modals/user.js');
 
@@ -11,6 +12,8 @@ exports.getPosts = async (req, res, next) => {
   try {
     const totalItems = await Post.find().countDocuments();
     const posts = await Post.find()
+      .populate('creator')
+      .sort({createdAt : -1})
       .skip((currentPage - 1) * perPage)
       .limit(perPage) ; 
   
@@ -53,6 +56,12 @@ exports.createPost = async (req, res, next) => {
     const user = await User.findById(req.userId) ;
     user.posts.push(post);
     await user.save();
+    io.getIO().emit('posts', // this will send the post to the all clients
+      { 
+        action : 'create' , 
+        creator : {...post._doc  ,  creator : {_id : req.userId , name : user.name }} 
+      } // this object is not define by the socket.io you can send any data with any key from here to the frontend like we are sending action and post 
+    ); 
     res.status(201).json({
       message: 'Post created successfully!',
       post: post,
@@ -112,13 +121,13 @@ exports.updatePost = async (req , res , next) =>{
     throw err;
   }
   try {
-    const post = await Post.findById(postId);
+    const post = await Post.findById(postId).populate('creator');
     if (!post) {
       const error = new Error('Not Found Post !!!');
       error.statusCode = 422;
       throw error;
     };
-    if(post.creator.toString() !== req.userId){
+    if(post.creator._id.toString() !== req.userId){
       const error = new Error('Not Authorized !!!');
       error.statusCode = 403;
       throw error;
@@ -130,7 +139,9 @@ exports.updatePost = async (req , res , next) =>{
     post.content = content ;
     post.imageUrl = imageUrl ;
     
-    await post.save();
+    const result = await post.save();
+
+    io.getIO().emit('posts' , {action : 'update' , post : result })
 
     res.status(200).json({message : 'Post is Updated' , post : result});
 
@@ -162,10 +173,12 @@ exports.deletePost = async (req, res, next) => {
     const user = await User.findById(req.userId);
     user.posts.pull(postId);
     await user.save();
+
+    io.getIO().emit('posts' , {action : 'delete' , post : postId })
     
     res.status(200).json({ message: 'Post is Deleted' })
 
-  } catch (errors) {
+  } catch (err) {
     if (!err.statusCode) {
       err.statusCode = 500;
     }
